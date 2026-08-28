@@ -36,23 +36,21 @@ def cancel_requested(ctx: AppContext) -> bool:
 class SharedProgress:
     """Aggregates byte counts from concurrent download streams.
 
-    Each stream (track) registers a base offset and reports deltas; the
-    aggregate ``downloaded`` is the sum of all tracks plus their bases.
-    Per-track totals feed the dual-bar frontend while the aggregate
-    ``total`` is owned by the download worker, not this object.
+    Each stream (track) reports its own deltas; the aggregate ``downloaded``
+    is the sum of every track's bytes, and each track reports only its own
+    bytes for its per-track bar. The aggregate ``total`` is owned by the
+    download worker, not this object.
     """
 
     def __init__(self, ctx: AppContext) -> None:
         self._ctx = ctx
         self._lock = threading.Lock()
-        self._bases: dict[str, int] = {}
         self._deltas: dict[str, int] = {}
         self._files: dict[str, str] = {}
         self._track_totals: dict[str, int] = {}
 
-    def configure(self, track: str, filename: str, base: int, track_total: int) -> None:
+    def configure(self, track: str, filename: str, track_total: int) -> None:
         with self._lock:
-            self._bases[track] = base
             self._files[track] = filename
             self._track_totals[track] = track_total
             self._deltas.setdefault(track, 0)
@@ -64,13 +62,13 @@ class SharedProgress:
             updates: dict[str, Any] = {"downloaded": aggregate}
             if track == "model":
                 updates.update(
-                    model_downloaded=self._bases.get(track, 0) + self._deltas[track],
+                    model_downloaded=self._deltas[track],
                     model_total=self._track_totals.get(track, 0),
                     current_file=self._files.get(track, ""),
                 )
             elif track == "mmproj":
                 updates.update(
-                    mmproj_downloaded=self._bases.get(track, 0) + self._deltas[track],
+                    mmproj_downloaded=self._deltas[track],
                     mmproj_total=self._track_totals.get(track, 0),
                 )
             else:
@@ -79,7 +77,7 @@ class SharedProgress:
 
     def done_for(self, track: str) -> int:
         with self._lock:
-            return self._bases.get(track, 0) + self._deltas.get(track, 0)
+            return self._deltas.get(track, 0)
 
 
 class _Counter:
@@ -234,7 +232,7 @@ def parallel_chunked_download(
     """
     dest.parent.mkdir(parents=True, exist_ok=True)
     progress = progress or SharedProgress(ctx)
-    progress.configure(track, filename or dest.name, completed_bytes, total_bytes)
+    progress.configure(track, filename or dest.name, total_bytes)
     counter = _Counter(progress, track)
 
     supports_ranges, probed_total = probe_range_support(url, headers, urlopen)

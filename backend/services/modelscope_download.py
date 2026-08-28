@@ -206,7 +206,9 @@ def start_ms_model_download(
             mmproj_path = ""
             if mmproj_file and mmproj_dest:
                 # Download model and mmproj concurrently; each stream reports
-                # its own track (model/mmproj) so the UI can show two bars.
+                # its own track (model/mmproj) so the UI can show two bars,
+                # while SharedProgress keeps the aggregate moving too.
+                progress = SharedProgress(ctx)
                 mmproj_results: list[int] = []
 
                 def _run_mmproj() -> None:
@@ -220,10 +222,10 @@ def start_ms_model_download(
                             mmproj_total,
                             urlopen,
                             track="mmproj",
+                            progress=progress,
                         )
                     )
 
-                mmproj_total = get_ms_file_size(repo_id, mmproj_file, urlopen)
                 mmproj_thread = threading.Thread(target=_run_mmproj, daemon=True)
                 mmproj_thread.start()
                 model_bytes = download_ms_file(
@@ -235,6 +237,7 @@ def start_ms_model_download(
                     model_total,
                     urlopen,
                     track="model",
+                    progress=progress,
                 )
                 mmproj_thread.join()
                 completed = model_bytes + (mmproj_results[0] if mmproj_results else 0)

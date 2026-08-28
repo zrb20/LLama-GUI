@@ -347,7 +347,7 @@ def start_hf_model_download(
                             revision,
                             token,
                             mmproj_dest,
-                            model_total,
+                            0,
                             mmproj_total,
                             urlopen,
                             track="mmproj",
