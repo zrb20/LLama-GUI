@@ -107,13 +107,14 @@
             mmprojBar.style.display = "";
             const mPct = Math.min(100, Math.round((prog.mmproj_downloaded / prog.mmproj_total) * 100));
             mmprojFill.style.width = mPct + "%";
-            mmprojText.textContent = `mmproj ${mPct}%（${formatHfBytes(prog.mmproj_downloaded)} / ${formatHfBytes(prog.mmproj_total)}）`;
+            mmprojText.textContent = `mmproj ${mPct}%（${formatHfBytes(prog.mmproj_downloaded)} / ${formatHfBytes(prog.mmproj_total)}，${trackSpeed("mmproj", prog.mmproj_downloaded, prog)}）`;
             fill.style.width = "0%";
-            text.textContent = `模型 ${prog.model_total ? Math.min(100, Math.round((prog.model_downloaded / prog.model_total) * 100)) + "%" : ""}（${formatHfBytes(prog.model_downloaded)} / ${formatHfBytes(prog.model_total)}）`;
+            text.textContent = `模型 ${prog.model_total ? Math.min(100, Math.round((prog.model_downloaded / prog.model_total) * 100)) + "%" : ""}（${formatHfBytes(prog.model_downloaded)} / ${formatHfBytes(prog.model_total)}，${trackSpeed("model", prog.model_downloaded, prog)}）`;
             return;
         }
         const staleBar = document.getElementById("hf-progress-mmproj");
         if (staleBar && typeof staleBar.remove === "function") staleBar.remove();
+        resetSpeeds();
 
         if (status === "done") {
             fill.style.width = "100%";
@@ -121,12 +122,34 @@
         } else if (prog.total > 0) {
             const pct = Math.min(100, Math.round((prog.downloaded / prog.total) * 100));
             fill.style.width = pct + "%";
-            text.textContent = `${prog.current_file || "下载中"} ${pct}%（${formatHfBytes(prog.downloaded)} / ${formatHfBytes(prog.total)}）`;
+            text.textContent = `${prog.current_file || "下载中"} ${pct}%（${formatHfBytes(prog.downloaded)} / ${formatHfBytes(prog.total)}，${trackSpeed("agg", prog.downloaded, prog)}）`;
         } else {
             fill.style.width = active ? "25%" : "100%";
             const bytes = prog.downloaded ? formatHfBytes(prog.downloaded) : "";
             text.textContent = (prog.message || status || "Working...") + (bytes ? `（已下载 ${bytes}）` : "");
         }
+    }
+
+    // Per-track speed estimation from consecutive poll snapshots (500ms apart),
+    // smoothed for display. Reset whenever the dual/single layout switches or
+    // a new download starts, so stale rates never leak across runs.
+    let speedState = {};
+    function trackSpeed(track, currentBytes, prog) {
+        const now = Date.now();
+        const prev = speedState[track];
+        speedState[track] = { bytes: currentBytes, at: now };
+        if (!prev || currentBytes < prev.bytes) return "测速中…";
+        const dt = (now - prev.at) / 1000;
+        if (dt < 0.2) {
+            return prev.rate !== undefined ? formatHfBytes(Math.max(0, prev.rate)) + "/s" : "测速中…";
+        }
+        const inst = (currentBytes - prev.bytes) / dt;
+        const smoothed = prev.rate !== undefined ? prev.rate * 0.6 + inst * 0.4 : inst;
+        speedState[track].rate = smoothed;
+        return formatHfBytes(Math.max(0, smoothed)) + "/s";
+    }
+    function resetSpeeds() {
+        speedState = {};
     }
 
     function populateFileSelect(select, files, placeholder) {

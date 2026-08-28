@@ -176,7 +176,7 @@ function document_contains(elements, id) {
     ui.updateProgress({ status: "downloading", downloaded: 1048576, total: 2097152, current_file: "model.gguf" });
     assert.equal(progress.classList.contains("hidden"), false);
     assert.equal(fill.style.width, "50%");
-    assert.equal(text.textContent, "model.gguf 50%（1.0 MB / 2.0 MB）");
+    assert.match(text.textContent, /model\.gguf 50%（1\.0 MB \/ 2\.0 MB/);
 
     // The backend keeps reporting downloaded == total after finishing; the bar
     // must switch to a finished state instead of sitting at "Downloading 100%".
