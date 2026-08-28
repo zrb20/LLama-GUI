@@ -10,15 +10,18 @@ download can run at a time regardless of source.
 import json
 import pathlib
 import threading
-import time
 import urllib.error
 import urllib.request
-from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable
 
 from backend.context import AppContext
 from backend.http import sanitize_error
 from backend.services import model_dir
+from backend.services.http_chunks import (
+    SharedProgress,
+    parallel_chunked_download,
+    probe_range_support,
+)
 from backend.services.hf_download import (
     get_model_download_snapshot,
     is_mmproj_filename,
@@ -36,11 +39,6 @@ MS_API_BASE = "https://www.modelscope.cn"
 MS_REPO_FILES_API = MS_API_BASE + "/api/v1/models/{repo_id}/repo/files?Recursive=true"
 MS_FILE_URL = MS_API_BASE + "/models/{repo_id}/resolve/master/{path}"
 USER_AGENT = "Llama-GUI"
-
-CHUNK_SIZE = 32 * 1024 * 1024
-READ_SIZE = 1024 * 1024
-MAX_WORKERS = 8
-CHUNK_RETRIES = 3
 
 
 def get_ms_model_files(repo_id: str, urlopen: UrlOpen = urllib.request.urlopen) -> dict[str, Any]:
@@ -93,145 +91,21 @@ def get_ms_file_size(repo_id: str, filename: str, urlopen: UrlOpen = urllib.requ
     hop has only a tiny redirect body), but a GET with ``Range: bytes=0-0``
     comes back 206 with ``Content-Range: bytes 0-0/<total>`` from the CDN.
     """
-    request = urllib.request.Request(
-        build_ms_download_url(repo_id, filename),
-        headers={"User-Agent": USER_AGENT, "Range": "bytes=0-0"},
+    supported, total = probe_range_support(
+        build_ms_download_url(repo_id, filename), {"User-Agent": USER_AGENT}, urlopen
     )
+    if total:
+        return total
     try:
+        request = urllib.request.Request(
+            build_ms_download_url(repo_id, filename), headers={"User-Agent": USER_AGENT}
+        )
         with urlopen(request, timeout=30) as resp:
-            raw = resp.headers.get("Content-Range")
-        if raw and "/" in raw:
-            total = raw.rsplit("/", 1)[1].strip()
-            return int(total)
-        raw = resp.headers.get("Content-Length")
-        return int(raw) if raw else 0
+            raw = resp.headers.get("Content-Length")
+            return int(raw) if raw else 0
     except (OSError, ValueError, urllib.error.URLError) as exc:
         print(f"[ms_download] failed to read file size for {repo_id}/{filename}: {exc}", flush=True)
         return 0
-
-
-class _ChunkCounter:
-    """Thread-safe byte counter feeding one track of the shared download state."""
-
-    def __init__(
-        self,
-        ctx: AppContext,
-        completed_bytes: int,
-        total_bytes: int,
-        filename: str,
-        track: str = "",
-    ) -> None:
-        self._ctx = ctx
-        self._lock = threading.Lock()
-        self._completed = completed_bytes
-        self._total = total_bytes
-        self._filename = filename
-        self._track = track  # "model" | "mmproj" | "" (legacy aggregate)
-        self._done = 0
-
-    def add(self, count: int) -> None:
-        with self._lock:
-            self._done += count
-            if self._track == "model":
-                set_model_download_state(
-                    self._ctx,
-                    model_downloaded=self._completed + self._done,
-                    model_total=self._total,
-                    current_file=self._filename,
-                )
-            elif self._track == "mmproj":
-                set_model_download_state(
-                    self._ctx,
-                    mmproj_downloaded=self._completed + self._done,
-                    mmproj_total=self._total,
-                )
-            else:
-                set_model_download_state(
-                    self._ctx,
-                    downloaded=self._completed + self._done,
-                    total=self._total,
-                    current_file=self._filename,
-                )
-
-    @property
-    def done(self) -> int:
-        with self._lock:
-            return self._done
-
-
-def _cancel_requested(ctx: AppContext) -> bool:
-    return ctx.state.model_download_cancel.is_set()
-
-
-def _download_chunk(
-    ctx: AppContext,
-    url: str,
-    start: int,
-    end: int,
-    part_path: pathlib.Path,
-    counter: _ChunkCounter,
-    urlopen: UrlOpen,
-) -> None:
-    """Fetch one byte range into *part_path*, resuming from what's on disk."""
-    got = part_path.stat().st_size if part_path.exists() else 0
-    span = end - start + 1
-    for attempt in range(CHUNK_RETRIES):
-        if _cancel_requested(ctx):
-            raise InterruptedError("下载已取消。")
-        if got >= span:
-            return
-        try:
-            request = urllib.request.Request(
-                url,
-                headers={"User-Agent": USER_AGENT, "Range": f"bytes={start + got}-{end}"},
-            )
-            with urlopen(request, timeout=60) as resp:
-                status = getattr(resp, "status", 200)
-                if status not in (206, 200):
-                    raise OSError(f"Unexpected HTTP status {status} for Range request.")
-                with open(part_path, "ab" if status == 206 else "wb") as f:
-                    if status == 200:
-                        got = 0
-                    while True:
-                        if _cancel_requested(ctx):
-                            raise InterruptedError("下载已取消。")
-                        chunk = resp.read(READ_SIZE)
-                        if not chunk:
-                            break
-                        f.write(chunk)
-                        got += len(chunk)
-                        counter.add(len(chunk))
-            if got >= span:
-                return
-            raise OSError(f"Chunk short read: {got}/{span} bytes.")
-        except InterruptedError:
-            raise
-        except Exception as exc:  # noqa: BLE001 - retried below, then reported
-            if attempt + 1 >= CHUNK_RETRIES:
-                raise OSError(f"Chunk {start}-{end} failed after {CHUNK_RETRIES} attempts: {exc}") from exc
-            time.sleep(1.5 * (attempt + 1))
-
-
-def _single_stream(
-    ctx: AppContext,
-    url: str,
-    dest: pathlib.Path,
-    counter: _ChunkCounter,
-    urlopen: UrlOpen,
-) -> None:
-    """Fallback when the server (or fake) does not honour Range requests."""
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    tmp_path = dest.with_suffix(dest.suffix + ".part")
-    with urlopen(request, timeout=60) as resp, open(tmp_path, "wb") as f:
-        while True:
-            if _cancel_requested(ctx):
-                raise InterruptedError("下载已取消。")
-            chunk = resp.read(READ_SIZE)
-            if not chunk:
-                break
-            f.write(chunk)
-            counter.add(len(chunk))
-    tmp_path.replace(dest)
 
 
 def download_ms_file(
@@ -243,89 +117,25 @@ def download_ms_file(
     total_bytes: int,
     urlopen: UrlOpen = urllib.request.urlopen,
     track: str = "",
+    progress: SharedProgress | None = None,
 ) -> int:
     """Download one file with parallel Range chunks; returns bytes written.
 
-    On success the chunk temp files are removed. On failure the chunk files are
-    removed too (a fresh attempt re-plans them), matching the partial-file
-    cleanup contract in AGENTS.md.
+    Thin wrapper over the shared engine with ModelScope URL/headers. Chunk
+    temp files are removed in ``finally`` per the AGENTS.md contract.
     """
-    url = build_ms_download_url(repo_id, filename)
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    total = get_ms_file_size(repo_id, filename, urlopen)
-    counter = _ChunkCounter(ctx, completed_bytes, total_bytes or total, filename, track)
-
-    supports_ranges = False
-    if total > 0:
-        probe = urllib.request.Request(
-            url, headers={"User-Agent": USER_AGENT, "Range": "bytes=0-0"}
-        )
-        try:
-            with urlopen(probe, timeout=30) as resp:
-                status = getattr(resp, "status", 200)
-                content_range = resp.headers.get("Content-Range") or ""
-                accepts = str(resp.headers.get("Accept-Ranges") or "")
-            if status == 206 and "/" in content_range:
-                supports_ranges = True
-            elif accepts.lower() == "bytes":
-                supports_ranges = True
-        except (OSError, urllib.error.URLError):
-            supports_ranges = False
-
-    part_paths: list[pathlib.Path] = []
-    try:
-        if total <= 0 or not supports_ranges:
-            _single_stream(ctx, url, dest, counter, urlopen)
-        else:
-            chunk_count = min(MAX_WORKERS, max(1, total // CHUNK_SIZE + (1 if total % CHUNK_SIZE else 0)))
-            base = total // chunk_count
-            spans = []
-            start = 0
-            for index in range(chunk_count):
-                end = total - 1 if index == chunk_count - 1 else start + base - 1
-                spans.append((start, end))
-                start = end + 1
-            part_paths = [
-                dest.with_suffix(dest.suffix + f".part{index}")
-                for index in range(len(spans))
-            ]
-            with ThreadPoolExecutor(max_workers=len(spans)) as pool:
-                futures = [
-                    pool.submit(
-                        _download_chunk,
-                        ctx,
-                        url,
-                        span_start,
-                        span_end,
-                        part_path,
-                        counter,
-                        urlopen,
-                    )
-                    for (span_start, span_end), part_path in zip(spans, part_paths)
-                ]
-                for future in futures:
-                    future.result()
-
-            assembled = dest.with_suffix(dest.suffix + ".assembling")
-            with open(assembled, "wb") as out:
-                for part_path in part_paths:
-                    with open(part_path, "rb") as part_file:
-                        while True:
-                            buf = part_file.read(READ_SIZE)
-                            if not buf:
-                                break
-                            out.write(buf)
-            if assembled.stat().st_size != total:
-                raise OSError(f"Assembled size mismatch for {filename}.")
-            assembled.replace(dest)
-        return counter.done
-    finally:
-        for part_path in part_paths:
-            try:
-                if part_path.exists():
-                    part_path.unlink()
-            except OSError as exc:
-                print(f"[ms_download] failed to remove chunk file: {exc}", flush=True)
+    return parallel_chunked_download(
+        ctx,
+        build_ms_download_url(repo_id, filename),
+        {"User-Agent": USER_AGENT},
+        dest,
+        completed_bytes,
+        total_bytes,
+        track or filename,
+        urlopen,
+        progress=progress,
+        filename=filename,
+    )
 
 
 def start_ms_model_download(

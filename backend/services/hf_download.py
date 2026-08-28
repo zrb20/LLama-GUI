@@ -10,6 +10,10 @@ from typing import Any, Callable, Mapping, Optional
 from backend.context import AppContext
 from backend.http import sanitize_error
 from backend.services import model_dir
+from backend.services.http_chunks import (
+    SharedProgress,
+    parallel_chunked_download,
+)
 
 UrlOpen = Callable[..., Any]
 
@@ -227,41 +231,26 @@ def download_hf_file(
     completed_bytes: int,
     total_bytes: int,
     urlopen: UrlOpen = urllib.request.urlopen,
+    track: str = "",
+    progress: Optional[SharedProgress] = None,
 ) -> int:
+    """Parallel Range-chunk download of one file from the HF CDN."""
     url = build_hf_download_url(repo_id, filename, revision)
     headers = {"User-Agent": "Llama-GUI"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    req = urllib.request.Request(url, headers=headers)
-    tmp_path = dest.with_suffix(dest.suffix + ".part")
-    downloaded = 0
-    with urlopen(req, timeout=60) as resp, open(tmp_path, "wb") as f:
-        expected_bytes = _content_length(resp)
-        while True:
-            if ctx.state.model_download_cancel.is_set():
-                raise InterruptedError("下载已取消。")
-            chunk = resp.read(1024 * 1024)
-            if not chunk:
-                break
-            f.write(chunk)
-            downloaded += len(chunk)
-            set_model_download_state(
-                ctx,
-                downloaded=completed_bytes + downloaded,
-                total=total_bytes,
-                current_file=pathlib.PurePosixPath(filename).name,
-            )
-    # http.client deliberately does not raise IncompleteRead from read(amt) — it
-    # just closes the connection and returns b"" — so a connection dropped
-    # mid-transfer looks exactly like a clean EOF here. Without this check the
-    # truncated .part was promoted to a "done" GGUF that fails at load time.
-    if expected_bytes is not None and downloaded != expected_bytes:
-        raise OSError(
-            f"Download of {filename} was incomplete: got {downloaded} bytes, "
-            f"expected {expected_bytes}."
-        )
-    tmp_path.replace(dest)
-    return downloaded
+    return parallel_chunked_download(
+        ctx,
+        url,
+        headers,
+        dest,
+        completed_bytes,
+        total_bytes,
+        track or filename,
+        urlopen,
+        progress=progress,
+        filename=pathlib.PurePosixPath(filename).name,
+    )
 
 
 def remove_partial_downloads(paths: list[pathlib.Path]) -> None:

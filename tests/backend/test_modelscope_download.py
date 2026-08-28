@@ -13,6 +13,7 @@ import time
 import unittest
 from unittest import mock
 
+from backend.services import http_chunks
 from backend.services import modelscope_download as ms_service
 from tests.backend.test_services import FakeDownloadResponse, make_service_context
 
@@ -150,7 +151,7 @@ class StartMsModelDownloadTests(unittest.TestCase):
 
             with (
                 mock.patch.object(ms_service, "get_ms_file_size", return_value=len(payload)),
-                mock.patch.object(ms_service, "CHUNK_SIZE", 4096),
+                mock.patch.object(http_chunks, "CHUNK_SIZE", 4096),
             ):
                 ms_service.start_ms_model_download(
                     ctx,
