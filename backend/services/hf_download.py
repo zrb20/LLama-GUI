@@ -316,9 +316,16 @@ def start_hf_model_download(
             destinations.append(mmproj_dest)
         try:
             model_dest.parent.mkdir(parents=True, exist_ok=True)
-            total = get_hf_file_size(repo_id, model_file, revision, token)
-            if mmproj_file:
-                total += get_hf_file_size(repo_id, mmproj_file, revision, token)
+            # Probe both sizes up front, then download model and mmproj in
+            # parallel with per-track progress (dual bars in the UI), matching
+            # the ModelScope worker behaviour.
+            model_total = get_hf_file_size(repo_id, model_file, revision, token)
+            mmproj_total = (
+                get_hf_file_size(repo_id, mmproj_file, revision, token)
+                if mmproj_file
+                else 0
+            )
+            total = model_total + mmproj_total
             reset_model_download_state(
                 ctx,
                 status="downloading",
@@ -326,22 +333,50 @@ def start_hf_model_download(
                 total=total,
                 downloaded=0,
             )
-            completed = download_hf_file(ctx, repo_id, model_file, revision, token, model_dest, 0, total, urlopen)
             mmproj_path = ""
             if mmproj_file and mmproj_dest:
-                set_model_download_state(ctx, message=f"正在下载 {mmproj_dest.name}…")
-                completed += download_hf_file(
+                progress = SharedProgress(ctx)
+                mmproj_results: list[int] = []
+
+                def _run_mmproj() -> None:
+                    mmproj_results.append(
+                        download_hf_file(
+                            ctx,
+                            repo_id,
+                            mmproj_file,
+                            revision,
+                            token,
+                            mmproj_dest,
+                            model_total,
+                            mmproj_total,
+                            urlopen,
+                            track="mmproj",
+                            progress=progress,
+                        )
+                    )
+
+                mmproj_thread = threading.Thread(target=_run_mmproj, daemon=True)
+                mmproj_thread.start()
+                model_bytes = download_hf_file(
                     ctx,
                     repo_id,
-                    mmproj_file,
+                    model_file,
                     revision,
                     token,
-                    mmproj_dest,
-                    completed,
-                    total,
+                    model_dest,
+                    0,
+                    model_total,
                     urlopen,
+                    track="model",
+                    progress=progress,
                 )
+                mmproj_thread.join()
+                completed = model_bytes + (mmproj_results[0] if mmproj_results else 0)
                 mmproj_path = str(mmproj_dest)
+            else:
+                completed = download_hf_file(
+                    ctx, repo_id, model_file, revision, token, model_dest, 0, model_total, urlopen
+                )
             set_model_download_state(
                 ctx,
                 status="done",
