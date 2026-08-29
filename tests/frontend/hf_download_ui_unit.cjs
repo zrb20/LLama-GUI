@@ -474,7 +474,7 @@ function document_contains(elements, id) {
     const mmprojBar = elements.get("hf-progress-mmproj");
     assert.ok(mmprojBar, "dual track creates a second bar");
     const mmprojFill = elements.get("hf-progress-mmproj-fill");
-    assert.equal(fill.style.width, "0%");
+    assert.equal(fill.style.width, "50%");
     assert.equal(mmprojFill.style.width, "25%");
     assert.match(text.textContent, /模型 50%/);
     assert.match(elements.get("hf-progress-mmproj-text").textContent, /mmproj 25%/);

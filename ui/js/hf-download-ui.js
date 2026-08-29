@@ -108,8 +108,9 @@
             const mPct = Math.min(100, Math.round((prog.mmproj_downloaded / prog.mmproj_total) * 100));
             mmprojFill.style.width = mPct + "%";
             mmprojText.textContent = `mmproj ${mPct}%（${formatHfBytes(prog.mmproj_downloaded)} / ${formatHfBytes(prog.mmproj_total)}，${trackSpeed("mmproj", prog.mmproj_downloaded, prog, prog.mmproj_total)}）`;
-            fill.style.width = "0%";
-            text.textContent = `模型 ${prog.model_total ? Math.min(100, Math.round((prog.model_downloaded / prog.model_total) * 100)) + "%" : ""}（${formatHfBytes(prog.model_downloaded)} / ${formatHfBytes(prog.model_total)}，${trackSpeed("model", prog.model_downloaded, prog, prog.model_total)}）`;
+            const modelPct = prog.model_total ? Math.min(100, Math.round((prog.model_downloaded / prog.model_total) * 100)) : 0;
+            fill.style.width = modelPct + "%";
+            text.textContent = `模型 ${modelPct}%（${formatHfBytes(prog.model_downloaded)} / ${formatHfBytes(prog.model_total)}，${trackSpeed("model", prog.model_downloaded, prog, prog.model_total)}）`;
             return;
         }
         const staleBar = document.getElementById("hf-progress-mmproj");
