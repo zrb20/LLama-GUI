@@ -1,0 +1,45 @@
+/* 模型库管理：列表 + 详情 + 删除/定位 */
+.mm-list { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow-y: auto; }
+
+.mm-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-raised);
+    cursor: pointer;
+}
+.mm-item:hover { border-color: var(--accent); }
+.mm-item.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+.mm-item-main { flex: 1; min-width: 0; }
+.mm-item-name { font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mm-item-meta { font-size: 11px; color: var(--fg-faint); display: flex; gap: 10px; flex-wrap: wrap; }
+
+.mm-item-actions { display: flex; gap: 6px; }
+
+.mm-detail {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-surface);
+    font-size: 12px;
+}
+.mm-detail h4 { margin: 0 0 8px; font-size: 13px; }
+.mm-detail-grid { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; }
+.mm-detail-grid dt { color: var(--fg-faint); }
+.mm-detail-grid dd { margin: 0; word-break: break-all; }
+.mm-detail-actions { margin-top: 10px; display: flex; gap: 8px; }
+
+.mm-badge {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 9px;
+    font-size: 10px;
+    border: 1px solid var(--border);
+    color: var(--fg-faint);
+}
+.mm-badge.badge-quant { color: var(--accent); border-color: var(--accent); }

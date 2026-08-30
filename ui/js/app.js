@@ -81,6 +81,15 @@ hfDownloadUi.configure({
     applyPresetModel,
     refreshQuickLaunchUI,
 });
+const modelManagerUi = window.LlamaGui.modelManagerUi;
+if (modelManagerUi) {
+    modelManagerUi.configure({
+        fetchJson,
+        confirmAction,
+        refreshModels,
+    });
+    modelManagerUi.init();
+}
 quickLaunchUi.configure({
     flagCore,
     configFlagsUi,

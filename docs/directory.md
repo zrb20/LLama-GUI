@@ -79,7 +79,7 @@
 
 ### Route Modules (`backend/routes/`)
 
-`API_ROUTER` at the bottom of `backend/app.py` is the authoritative registry: 48 exact routes plus one prefix route, 49 endpoints total. Keep this table in sync with it — a route that is registered but undocumented here is the drift that is hardest to notice.
+`API_ROUTER` at the bottom of `backend/app.py` is the authoritative registry: 51 exact routes plus two prefix routes, 53 endpoints total. Keep this table in sync with it — a route that is registered but undocumented here is the drift that is hardest to notice.
 
 | Route | Endpoints |
 |-------|-----------|
@@ -90,6 +90,7 @@
 | `install.py` | `GET /api/releases`, `GET /api/download-progress`, `POST /api/install`, `POST /api/update`, `POST /api/activate-custom` |
 | `metrics.py` | `GET /api/llama/metrics`, `GET /api/llama/slots`, `GET /api/llama/props` — Prometheus proxy and template-capability props |
 | `models.py` | `GET /api/models` — list GGUF files recursively as names relative to the active model root |
+| `model_manager.py` | `GET /api/model-manager/info/<path>`, `POST /api/model-manager/stat`, `POST /api/model-manager/delete`, `POST /api/model-manager/reveal` |
 | `model_dir.py` | `POST /api/models-dir` — set or reset the active model root |
 | `presets.py` | `GET /api/presets`, `POST /api/presets` (save), `POST /api/presets/rename`, `POST /api/presets/archive` (bulk archive/restore), `POST /api/presets/shortcut` (Windows shortcut export), `DELETE /api/presets/<name>` (prefix route) |
 | `hf_download.py` | `POST /api/hf/repo-files`, `POST /api/hf/download`, `POST /api/hf/download-cancel`, `GET /api/hf/download-status` |
@@ -112,6 +113,7 @@ Note that `/api/presets/fingerprint` and `/api/estimate-memory` live in `process
 | `hf_download.py` | HF repo listing, file download with cancel, path validation |
 | `modelscope_download.py` | ModelScope (魔搭) repo listing, multi-threaded chunked download with cancel, shared download state |
 | `model_dir.py` | Active model-root validation, metadata, and merged atomic config persistence |
+| `model_manager.py` | Per-model GGUF metadata (pure-stdlib header reader), two-step delete with path-safety checks, reveal-in-file-manager |
 | `web_search.py` | DuckDuckGo (`ddgs`) and optional SearXNG search, HTML-to-text, page fetching |
 | `tunnel.py` | Cloudflare tunnel lifecycle, binary download, status polling |
 | `git_update.py` | Git fetch/pull/status, safe dirty path classification |

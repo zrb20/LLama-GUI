@@ -52,6 +52,7 @@ from backend.routes import external_server as external_server_routes
 from backend.routes import file_picker as file_picker_routes
 from backend.routes import hf_download as hf_download_routes
 from backend.routes import modelscope_download as modelscope_download_routes
+from backend.routes import model_manager as model_manager_routes
 from backend.routes import metrics as metrics_routes
 from backend.routes import model_dir as model_dir_routes
 from backend.routes import models as models_routes
@@ -971,6 +972,10 @@ API_ROUTER = (
     .add("POST", "/api/select-folder", file_picker_routes.select_folder)
     .add("POST", "/api/models-dir", model_dir_routes.set_models_dir)
     .add_prefix("DELETE", "/api/presets/", presets_routes.delete_preset, "name")
+    .add_prefix("GET", "/api/model-manager/info/", model_manager_routes.get_model_info, "path")
+    .add("POST", "/api/model-manager/stat", model_manager_routes.post_model_stat)
+    .add("POST", "/api/model-manager/delete", model_manager_routes.post_model_delete)
+    .add("POST", "/api/model-manager/reveal", model_manager_routes.post_model_reveal)
 )
 
 

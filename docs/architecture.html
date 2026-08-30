@@ -686,6 +686,7 @@ footer {
 <tr><td class="mono">modelscope_download.py</td><td class="mono">modelscope_download.py · model_dir.py</td><td>List ModelScope repo GGUF files, multi-threaded chunked download into the active model root; shares the download state machine, cancel, and progress status with hf_download</td></tr>
 <tr><td class="mono">presets.py</td><td class="mono">—</td><td>Preset CRUD on <code>presets/*.json</code>, rename with created-time carry, Windows shortcut export</td></tr>
 <tr><td class="mono">models.py</td><td class="mono">model_dir.py</td><td>Recursive GGUF discovery under the active model root, returned as root-relative names</td></tr>
+<tr><td class="mono">model_manager.py</td><td class="mono">model_manager.py · gguf_meta.py · model_dir.py</td><td>Per-model info with GGUF header metadata, two-step delete with path-safety checks, reveal model folder</td></tr>
 <tr><td class="mono">model_dir.py</td><td class="mono">model_dir.py</td><td>Validate, persist, report, and reset the active model root without unsafe fallback</td></tr>
 <tr><td class="mono">tunnel.py</td><td class="mono">tunnel.py</td><td>Download <code>cloudflared</code>, start/stop quick tunnel, poll for the public URL</td></tr>
 <tr><td class="mono">git_update.py</td><td class="mono">git_update.py</td><td>Fetch origin, classify dirty paths, fast-forward to a stable tag or nightly branch head, reinstall deps</td></tr>
@@ -1128,6 +1129,10 @@ flagCore.setFlagValue("temperature", 0.5);
 <tr><td><span class="verb post">POST</span></td><td class="mono">/api/hf/download-cancel</td><td>Cancel the in-progress download</td></tr>
 <tr><td><span class="verb post">POST</span></td><td class="mono">/api/ms/repo-files</td><td>List GGUF files in a ModelScope repo</td></tr>
 <tr><td><span class="verb post">POST</span></td><td class="mono">/api/ms/download</td><td>Start a multi-threaded ModelScope model download</td></tr>
+<tr><td><span class="verb get">GET</span></td><td class="mono">/api/model-manager/info/&lt;path&gt;</td><td>Per-model facts and GGUF header metadata</td></tr>
+<tr><td><span class="verb post">POST</span></td><td class="mono">/api/model-manager/stat</td><td>Preview what a delete would remove</td></tr>
+<tr><td><span class="verb post">POST</span></td><td class="mono">/api/model-manager/delete</td><td>Delete a model file or repo folder</td></tr>
+<tr><td><span class="verb post">POST</span></td><td class="mono">/api/model-manager/reveal</td><td>Open the model folder in the file manager</td></tr>
 <tr><td><span class="verb post">POST</span></td><td class="mono">/api/remote-tunnel/start</td><td>Start the Cloudflare quick tunnel</td></tr>
 <tr><td><span class="verb post">POST</span></td><td class="mono">/api/remote-tunnel/stop</td><td>Stop the tunnel</td></tr>
 <tr><td><span class="verb post">POST</span></td><td class="mono">/api/presets</td><td>Save a preset</td></tr>
