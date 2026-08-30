@@ -2,6 +2,11 @@
 
 Please give a brief summary of changes made to the program (excluding documentation changes), include the date the changes were made.
 
+## 2026-08-29
+- Added a model library manager to Configure: an expandable panel below the model folder row lists every GGUF under the active root with size and quantization badge; clicking a model shows its GGUF header metadata (architecture, quantization, size label, context length, block count, expert counts, tensor count) read by a pure-stdlib parser that never loads tensor data; each model offers Info / Reveal-in-folder / Delete. Deletion is two-step — a stat request previews the file count and total size, the confirm dialog shows them, and path-safety checks refuse anything resolving outside the model root (including the root itself). Files locked by a running server return a clear error instead of a raw traceback.
+- Added four model-manager endpoints (`GET /api/model-manager/info/<path>`, `POST /api/model-manager/stat|delete|reveal`).
+- ModelScope and Hugging Face downloads now share one parallel Range-chunk engine; HF downloads gained multi-threading, and per-track (model/mmproj) progress with per-track speed display plus a finished-track "0 B/s" state. Downloaded files are marked with a check in the source lists and the Download button hides for them.
+
 ## 2026-08-28
 - Added ModelScope (魔搭) as a second model source in the HF download panel: a Source dropdown switches between Hugging Face and ModelScope, backed by new `POST /api/ms/repo-files` and `POST /api/ms/download` routes (`backend/services/modelscope_download.py`). ModelScope downloads use parallel HTTP Range chunks (up to 8 workers) with automatic single-stream fallback; progress, cancel, and completion state are shared with the HF flow, so the same progress bar, cancel button, and model auto-selection work for both sources. Revision and token inputs are disabled for ModelScope (not part of its API). The downloaded file passed an end-to-end check: listed via the ModelScope API, downloaded, discovered by the models API, and loaded by llama-server.
 
