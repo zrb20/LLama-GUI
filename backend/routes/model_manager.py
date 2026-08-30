@@ -1,6 +1,7 @@
 """Routes for model management: info, delete (two-step), reveal folder."""
 
 import sys
+import urllib.parse
 
 from backend.http import sanitize_error
 from backend.services import lifecycle as lifecycle_service
@@ -8,7 +9,7 @@ from backend.services import model_manager
 
 
 def get_model_info(request, response, ctx):
-    rel = request.params.get("path", "")
+    rel = urllib.parse.unquote(request.params.get("path", ""))
     try:
         response.json(model_manager.model_info(ctx, rel))
     except FileNotFoundError as exc:
