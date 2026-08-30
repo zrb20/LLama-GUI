@@ -146,6 +146,26 @@ _ESTIMATE_VALUE_FLAGS = {
     "--spec-draft-type-v",
     "-ctvd",
     "--cache-type-v-draft",
+    # Speculative decoding / MTP parameters. These are value-taking flags the
+    # estimator must forward so llama-fit-params can size the draft model,
+    # the draft KV cache, and the MTP overhead — without them a MTP launch is
+    # estimated as if it were plain single-model inference.
+    "--spec-type",
+    "-nsd",
+    "--spec-draft-n",
+    "--spec-draft-n-max",
+    "-nsdmin",
+    "--spec-draft-n-min",
+    "-sdp",
+    "--spec-draft-p",
+    "-md",
+    "--model-draft",
+    "-mm",
+    "--mmproj",
+    "--mmproj-device",
+    "-j",
+    "--jinja",
+    "--reasoning-effort",
 }
 _ESTIMATE_BOOL_FLAGS = {
     "--swa-full",

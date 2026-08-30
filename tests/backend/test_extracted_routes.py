@@ -1617,6 +1617,28 @@ class ExtractedRouteTests(unittest.TestCase):
             with self.subTest(args=args):
                 self.assertEqual(process_manager._memory_estimate_args(list(args)), expected, why)
 
+    def test_memory_estimate_args_forwards_speculative_and_mtp_flags(self):
+        """MTP/speculative args must reach the estimator so draft-model VRAM is
+        accounted for; without them a MTP launch is sized as plain inference."""
+        cases = [
+            # (input, expected output, why)
+            (["--spec-type", "draft-mtp", "-m", "a.gguf"], ["--spec-type", "draft-mtp", "-m", "a.gguf"],
+             "spec type is forwarded"),
+            (["--spec-draft-n-max", "6", "-m", "a.gguf"], ["--spec-draft-n-max", "6", "-m", "a.gguf"],
+             "draft count is forwarded"),
+            (["-md", "draft.gguf", "-m", "a.gguf"], ["-md", "draft.gguf", "-m", "a.gguf"],
+             "draft model path is forwarded"),
+            (["--mmproj", "mmproj.gguf", "-m", "a.gguf"], ["--mmproj", "mmproj.gguf", "-m", "a.gguf"],
+             "vision projector is forwarded"),
+            (["--spec-draft-n-max=8", "-m", "a.gguf"], ["--spec-draft-n-max=8", "-m", "a.gguf"],
+             "inline draft count is forwarded"),
+            (["--spec-type", "draft-mtp", "--verbose"], ["--spec-type", "draft-mtp", "--verbose"],
+             "spec flags coexist with plain bool flags"),
+        ]
+        for args, expected, why in cases:
+            with self.subTest(args=args):
+                self.assertEqual(process_manager._memory_estimate_args(list(args)), expected, why)
+
     def test_launch_does_not_hold_locks_across_runtime_validation(self):
         """_validate_launch_environment shells out to ldd/otool per packaged ggml
         library on Linux/macOS. Held under install_lock + process_lock it stalled
